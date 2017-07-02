@@ -237,53 +237,41 @@ int main(int argc, char **argv) {
     }
 
     FILE *file = fopen(argv[1], "rb");
-    fseek(file, 0, SEEK_END);
-    long file_size = ftell(file);
-    fseek(file, 0, SEEK_SET);
-    char *image = (char *) malloc(file_size);
-    char *imageStart = image;
-    fread(image, file_size, 1, file);
-    fclose(file);
 
-    IMAGE_DOS_HEADER dosHeader = *((IMAGE_DOS_HEADER *) image);
-    image += dosHeader.e_lfanew;
+    IMAGE_DOS_HEADER dosHeader;
+    fread(&dosHeader, sizeof (IMAGE_DOS_HEADER), 1, file);
+    fseek(file, dosHeader.e_lfanew, SEEK_SET);
 
-    // uint32_t ntHeadersSignature = *((uint32_t *) image);
     // Add 4 bytes to the offset
-    image += 4;
+    uint32_t ntHeadersSignature;
+    fread(&ntHeadersSignature, 4, 1, file);
 
-    IMAGE_FILE_HEADER fileHeader = *((IMAGE_FILE_HEADER *) image);
-    image += sizeof (IMAGE_FILE_HEADER);
+    IMAGE_FILE_HEADER fileHeader;
+    fread(&fileHeader, sizeof (IMAGE_FILE_HEADER), 1, file);
 
     // uint16_t IMAGE_FILE_32BIT_MACHINE = 0x0100;
     // return (IMAGE_FILE_32BIT_MACHINE & FileHeader.Characteristics) == IMAGE_FILE_32BIT_MACHINE;
-    bool is32BitHeader = (fileHeader.Machine == 0x14C) ? true : false; // 0x14C = X86
+    bool is32BitHeader = fileHeader.Machine == 0x14C; // 0x14C = X86
 
     IMAGE_OPTIONAL_HEADER32 optionalHeader32;
     IMAGE_OPTIONAL_HEADER64 optionalHeader64;
-    if (is32BitHeader) {
-        optionalHeader32 = *((IMAGE_OPTIONAL_HEADER32 *) image);
-        image += sizeof (IMAGE_OPTIONAL_HEADER32);
-    } else {
-        optionalHeader64 = *((IMAGE_OPTIONAL_HEADER64 *) image);
-        image += sizeof (IMAGE_OPTIONAL_HEADER64);
-    }
+    if (is32BitHeader)
+        fread(&optionalHeader32, sizeof (IMAGE_OPTIONAL_HEADER32), 1, file);
+    else
+        fread(&optionalHeader64, sizeof (IMAGE_OPTIONAL_HEADER64), 1, file);
 
     uint32_t offDebug = 0;
-    uint32_t cbDebug = 0;
-    long cbFromHeader = 0;
-    bool loopexit = 0;
+    uint32_t cbFromHeader = 0;
 
-    cbDebug = is32BitHeader ? optionalHeader32.Debug.Size : optionalHeader64.Debug.Size;
+    uint32_t cbDebug = is32BitHeader ? optionalHeader32.Debug.Size : optionalHeader64.Debug.Size;
 
     for (int headerNo = 0; headerNo < fileHeader.NumberOfSections; ++headerNo) {
-        IMAGE_SECTION_HEADER header = *((IMAGE_SECTION_HEADER *) image);
-        image += sizeof (IMAGE_SECTION_HEADER);
+        IMAGE_SECTION_HEADER header;
+        fread(&header, sizeof (IMAGE_SECTION_HEADER), 1, file);
 
         if ((header.PointerToRawData != 0) && (header.SizeOfRawData != 0) &&
-                (cbFromHeader < (long) (header.PointerToRawData + header.SizeOfRawData))) {
-            cbFromHeader = (long)
-                (header.PointerToRawData + header.SizeOfRawData);
+                (cbFromHeader < (header.PointerToRawData + header.SizeOfRawData))) {
+            cbFromHeader = header.PointerToRawData + header.SizeOfRawData;
         }
 
         if (cbDebug != 0) {
@@ -301,37 +289,42 @@ int main(int argc, char **argv) {
         }
     }
 
-    image = imageStart + offDebug;
+    fseek(file, offDebug, SEEK_SET);
+
+    bool loopexit = false;
 
     IMAGE_DEBUG_DIRECTORY_RAW debugInfo;
     while (cbDebug >= sizeof (IMAGE_DEBUG_DIRECTORY)) {
         if (loopexit == false) {
-            IMAGE_DEBUG_DIRECTORY imageDebugDirectory = *((IMAGE_DEBUG_DIRECTORY *) image);
-            image += sizeof (IMAGE_DEBUG_DIRECTORY);
+            
+            IMAGE_DEBUG_DIRECTORY imageDebugDirectory;
 
-            char *seekPosition = image;
+            fread(&imageDebugDirectory, sizeof (IMAGE_DEBUG_DIRECTORY), 1, file);
+
+            long seekPosition = ftell(file);
 
             if (imageDebugDirectory.Type == 0x2) {
-                image = imageStart + imageDebugDirectory.PointerToRawData;
-                debugInfo = *((IMAGE_DEBUG_DIRECTORY_RAW *) image);
+                fseek(file, imageDebugDirectory.PointerToRawData, SEEK_SET);
+                fread(&debugInfo, sizeof (IMAGE_DEBUG_DIRECTORY_RAW), 1, file);
                 loopexit = true;
 
                 // Downloading logic for .NET native images
                 if (strstr((char *) debugInfo.name, ".ni.") != 0) {
-                    image = seekPosition;
+                    fseek(file, seekPosition, SEEK_SET);
                     loopexit = false;
                 }
             }
 
-            if ((imageDebugDirectory.PointerToRawData != 0) &&
-                    (imageDebugDirectory.SizeOfData != 0) &&
-                    (cbFromHeader < (long) (imageDebugDirectory.PointerToRawData + imageDebugDirectory.SizeOfData))) {
-                cbFromHeader = (long) (imageDebugDirectory.PointerToRawData + imageDebugDirectory.SizeOfData);
+            if ((imageDebugDirectory.PointerToRawData != 0) && (imageDebugDirectory.SizeOfData != 0) &&
+                    (cbFromHeader < (imageDebugDirectory.PointerToRawData + imageDebugDirectory.SizeOfData))) {
+                cbFromHeader = imageDebugDirectory.PointerToRawData + imageDebugDirectory.SizeOfData;
             }
         }
 
         cbDebug -= sizeof (IMAGE_DEBUG_DIRECTORY);
     }
+
+    fclose(file);
 
     if (loopexit) {
         char *pdbName = (char *) strrchr((char *) debugInfo.name, '\\');
@@ -353,10 +346,8 @@ int main(int argc, char **argv) {
             debugInfo.guid[14], debugInfo.guid[15],
             debugInfo.age, cabName);
 
-        free(imageStart);
         return 0;
     } else {
-        free(imageStart);
         return 2; // failed to find pdb link
     }
 }
