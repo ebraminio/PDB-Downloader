@@ -1,0 +1,17 @@
+{
+  "name": "pdb-downloader",
+  "version": "0.0.1",
+  "description": "",
+  "main": "main.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ebraminio/PDB-Downloader.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ebraminio/PDB-Downloader/issues"
+  },
+  "homepage": "https://github.com/ebraminio/PDB-Downloader#readme",
+  "dependencies": {
+    "restructure": "^0.5.4"
+  }
+}
