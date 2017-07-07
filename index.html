@@ -1,0 +1,22 @@
+<html>
+  <body>
+    <h1>PDB-Downloader</h1>
+    Select the DLL/EXE you need its PDB:
+    <input type="file" onchange="openFile(event)">
+    <pre></pre>
+    <script src="bundle.js"></script> <!-- browserify -r buffer -r ./main -o bundle.js -->
+    <script>
+      var Buffer = require('buffer').Buffer;
+      var main = require('/main');
+
+      var openFile = function (event) {
+        var input = event.target;
+        var reader = new FileReader();
+        reader.onload = function () {
+          document.querySelector('pre').textContent += main(new Buffer(reader.result)) + '\n';
+        };
+        reader.readAsArrayBuffer(input.files[0]);
+      };
+    </script>
+  </body>
+</html>
