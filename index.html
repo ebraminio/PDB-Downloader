@@ -1,9 +1,10 @@
 <html>
   <body>
     <h1>PDB-Downloader</h1>
-    Select the DLL/EXE you need its PDB:
+    <p>Select the DLL/EXE you need its PDB:</p>
     <input type="file" onchange="openFile(event)">
     <pre></pre>
+    <p>(the link is a .cab file, you should extract it before use)</p>
     <script src="bundle.js"></script> <!-- browserify -r buffer -r ./main -o bundle.js -->
     <script>
       var Buffer = require('buffer').Buffer;
