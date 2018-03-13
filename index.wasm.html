@@ -1,0 +1,32 @@
+<html>
+  <body>
+    <h1>PDB-Downloader</h1>
+    <p>Select the DLL/EXE you need its PDB:</p>
+    <input type="file" onchange="openFile(event)">
+    <pre></pre>
+    <p>(the link is a .cab file, you should extract it before use)</p>
+    <!-- emcc main.cc -std=c++11 -o main.cc.js -s FORCE_FILESYSTEM=1 -s EXPORTED_FUNCTIONS='["_run"]' -s EXTRA_EXPORTED_RUNTIME_METHODS='["FS"]' -s 'EXTRA_EXPORTED_RUNTIME_METHODS=["ccall", "cwrap"]' -s WASM=1 -s MODULARIZE=1 -O3 -->
+    <script src="main.cc.js"></script>
+    <script>
+      Module().then(function (module) {
+        var run = module.cwrap('run', 'string', []);
+        window.r = run;
+        window.openFile = function (event) {
+          var input = event.target;
+          var reader = new FileReader();
+          reader.onload = function () {
+            module.FS.mkdir('/mem');
+            module.FS.mount(module.FS.filesystems.MEMFS, '/mem');
+            var stream = module.FS.open('/mem/blob', 'w+');
+            module.FS.write(stream, new Uint8Array(reader.result), 0, reader.result.byteLength, 0);
+            module.FS.close(stream);
+            // module._run();
+            // var result = module.FS.readFile('/mem/result', { encoding: 'utf8' });
+            document.querySelector('pre').textContent += run() + '\n';
+          };
+          reader.readAsArrayBuffer(input.files[0]);
+        };
+      });
+    </script>
+  </body>
+</html>

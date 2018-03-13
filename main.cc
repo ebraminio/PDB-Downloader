@@ -230,6 +230,7 @@ struct IMAGE_DEBUG_DIRECTORY_RAW {
 };
 #pragma pack()
 
+#ifndef EMSCRIPTEN
 int main(int argc, char **argv) {
     if (argc != 2) {
         fprintf(stderr, "Please enter your DLL file name");
@@ -237,6 +238,11 @@ int main(int argc, char **argv) {
     }
 
     FILE *file = fopen(argv[1], "rb");
+#else
+extern "C" {
+char* run() {
+    FILE *file = fopen("/mem/blob", "rb");
+#endif
 
     IMAGE_DOS_HEADER dosHeader;
     fread(&dosHeader, sizeof (IMAGE_DOS_HEADER), 1, file);
@@ -333,8 +339,9 @@ int main(int argc, char **argv) {
         char cabName[256];
         strcpy(cabName, pdbName);
         cabName[strlen(pdbName) - 1] = '_';
-        
-        printf("http://msdl.microsoft.com/download/symbols/%s/%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%d/%s",
+
+        char* result = (char *) malloc (256);
+        sprintf(result, "http://msdl.microsoft.com/download/symbols/%s/%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%.2X%d/%s",
             pdbName,
             debugInfo.guid[3], debugInfo.guid[2],
             debugInfo.guid[1], debugInfo.guid[0],
@@ -346,8 +353,21 @@ int main(int argc, char **argv) {
             debugInfo.guid[14], debugInfo.guid[15],
             debugInfo.age, cabName);
 
+#ifndef EMSCRIPTEN
+        printf(result);
+
         return 0;
     } else {
         return 2; // failed to find pdb link
     }
 }
+#else
+        // FILE* fresult = fopen("/mem/result", "wb");
+        // fprintf(fresult, "%s", result);
+        // fclose(fresult);
+        return result;
+    }
+    return 0;
+}
+}
+#endif
